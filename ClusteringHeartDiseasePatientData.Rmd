@@ -1,0 +1,146 @@
+---
+title: "Clustering Heart Disease Patient Data"
+author: "Jose A Maldonado-Garcia"
+date: "3/26/2020"
+output: html_document
+---
+
+## Targeting Treatment for Heart Disease Patients
+
+Unsupervised clustering algorithms allow us to group patients on their shared similar characteristics. This will help doctors understand which treatments might work their patients.
+
+```{r, echo=FALSE}
+#Load libraries needed
+library(ggplot2)
+
+# Load the data  
+heart_disease <- read.csv("heart_disease_patients.csv")
+
+# Print the first ten rows
+head(heart_disease)
+
+```
+
+Before grouping patients, we will conduct some basic summary statistics to familiarize ourselves with the data and to determine if scaling the data is needed.
+
+```{r, echo=FALSE}
+# Evidence that the data should be scaled?
+summary(heart_disease)
+
+```
+
+Clearly, scaling is needed and our data looks as follows:
+
+```{r, echo=FALSE}
+# Remove id
+heart_disease <- heart_disease[ , !(colnames(heart_disease) %in% c("id"))]
+
+# Scaling data and saving as a data frame
+scaled <- scale(heart_disease)
+
+```
+
+Now we can proceed with clustering our data.
+
+## K-means Clustering
+
+To ensure the K-means is clustering similar  observations, as opposed to clustering noise, we will run the algorithms twice. If patients are not in similar clusters after different iterations, then the clustering method is not picking up on meaningful relationships between patients.
+
+The following is the grouping for the first K-means run:
+
+```{r, echo=FALSE}
+
+# Set the seed so that results are reproducible
+seed_val  <- 10
+set.seed(seed_val)
+
+# Select a number of clusters
+k <- 5
+
+#First K-means run
+first_clust <- kmeans(scaled, centers = k, nstart = 1)
+
+# Set the seed
+seed_val <- 38
+set.seed(seed_val)
+
+#Second K-means run
+second_clust <- kmeans(scaled, centers = k)
+
+# How many patients are in each cluster?
+first_clust$size
+
+```
+
+The following is the grouping for the second K-means run:
+
+```{r, echo=FALSE}
+
+second_clust$size
+
+
+```
+
+The clusters from different iterations may not be the same but should be roughly the same size and have similar distributions of variables. If we had patients labeling, cluster validation would be possible. Since we do not have patient labeling, we'll use graphs to see how certain patient characteristics may have been used to group patients together. 
+
+```{r, echo=FALSE, fig.height=8, fig.width=12, fig.show='hold', fig.align="center"}
+
+# Add cluster assignments to the data
+heart_disease["first_clust"] <- first_clust$cluster
+heart_disease["second_clust"] <- second_clust$cluster
+
+# Plots
+p1  <- ggplot(heart_disease, aes(x = age, y = chol, col = as.factor(first_clust))) + 
+                geom_point()
+p2  <- ggplot(heart_disease, aes(x = age, y = chol, col = as.factor(second_clust))) + 
+                geom_point()
+
+p1
+p2
+
+```
+
+As shown in the figures above, different iterations of the k-means algorthm from different groups and is not worth futher exploring as an option.
+
+## Hierarchical Clustering 
+
+An alternative to k-means clustering is hierarchical clustering. This method works well when data have a nested structure. Heart disease patient data might follow this type of structure.
+
+Here we'll examine dendrograms of complete and single linkage.
+
+```{r, echo=FALSE, fig.show="hold", fig.align="center"}
+
+# Execute hierarchical clustering with complete linkage
+hier_clust_1 <- hclust(dist(scaled), method = "complete")
+hier_clust_2 <- hclust(dist(scaled), method = "single")
+
+
+# Print the dendrogram
+plot(hier_clust_1, labels=FALSE, xlab="")
+plot(hier_clust_2, labels=FALSE, xlab="")
+
+# Get cluster assignments based on number of selected clusters
+hc_1_assign <- cutree(hier_clust_1, k = 5)
+hc_2_assign <- cutree(hier_clust_2, k = 5 )
+
+```
+
+Complete linkage provides a balanced tree and will the grouping of choice. Lets examine the summary statistics created by grouping.
+
+```{r, echo=FALSE}
+
+# Add assignment of chosen hierarchical linkage
+heart_disease["hc_clust"] <- hc_1_assign
+
+# Remove the sex, first_clust, and second_clust variables
+hd_simple <- heart_disease[, !(colnames(heart_disease) %in% c("sex", "first_clust", "second_clust"))]
+
+# Get the mean and standard deviation summary statistics
+clust_summary <- do.call(data.frame, aggregate(. ~ hc_clust, data = hd_simple, function(x) c(avg = mean(x), sd = sd(x))))
+clust_summary
+
+```
+
+## Conclusion
+
+The k-mean algorithm did not produce similar clusters for each iteration of the algorithm, thus it will not be further explored. Hierarchical clustering is the only method of grouping patients worth further exploring before making a recommendation.
